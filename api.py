@@ -1,0 +1,167 @@
+# from fastapi import FastAPI
+# from pydantic import BaseModel
+# import joblib
+
+# from pipeline import build_features, generate_final_recommendation, prepare_for_clustering
+
+# app = FastAPI()
+
+# # load models
+# scaler = joblib.load("robust_scaler.joblib")
+# kmeans = joblib.load("kmeans_model.joblib")
+# cluster_baseline = joblib.load("cluster_baseline.joblib")
+
+# # input schema
+# class UserInput(BaseModel):
+#     salary: float
+#     food: float
+#     drink: float
+#     shopping: float
+#     transport: float
+#     bills: float
+#     health: float
+#     entertainment: float
+
+
+# @app.get("/")
+# def home():
+#     return {"message": "Smart Expense API 🚀"}
+
+
+# @app.post("/analyze")
+# def analyze(data: UserInput):
+
+#     spend_dict = {
+#         "food": data.food,
+#         "drink": data.drink,
+#         "shopping": data.shopping,
+#         "transport": data.transport,
+#         "bills": data.bills,
+#         "health": data.health,
+#         "entertainment": data.entertainment
+#     }
+
+#     total_spend = sum(spend_dict.values())
+#     remaining = data.salary - total_spend
+
+#     # نفس logic بتاعك بالظبط
+#     new_user_df = build_features(data.salary, spend_dict)
+#     X_new = prepare_for_clustering(new_user_df)
+#     X_scaled = scaler.transform(X_new)
+#     cluster = int(kmeans.predict(X_scaled)[0])
+#     new_user_df['cluster'] = cluster
+
+#     recommendation = generate_final_recommendation(
+#         new_user_df.iloc[0],
+#         cluster_baseline
+#     )
+
+#     return {
+#         "total_spend": total_spend,
+#         "remaining": remaining,
+#         "cluster": cluster,
+#         "recommendation": recommendation
+#     }
+
+
+# api.py الجديد 
+
+
+
+
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+import joblib
+
+from pipeline import build_features, generate_final_recommendation, prepare_for_clustering
+
+app = FastAPI()
+
+# -------------------------------
+# Load Models (مرة واحدة بس)
+# -------------------------------
+scaler = joblib.load("robust_scaler.joblib")
+kmeans = joblib.load("kmeans_model.joblib")
+cluster_baseline = joblib.load("cluster_baseline.joblib")
+
+# -------------------------------
+# Input Schema
+# -------------------------------
+class UserInput(BaseModel):
+    salary: float
+    food: float
+    drink: float
+    shopping: float
+    transport: float
+    bills: float
+    health: float
+    entertainment: float
+
+# -------------------------------
+# Home Route
+# -------------------------------
+@app.get("/")
+def home():
+    return {"message": "Smart Expense API 🚀"}
+
+# -------------------------------
+# Analyze Endpoint
+# -------------------------------
+@app.post("/analyze")
+def analyze(data: UserInput):
+
+    # -------------------------------
+    # Prepare Data
+    # -------------------------------
+    spend_dict = {
+        "food": data.food,
+        "drink": data.drink,
+        "shopping": data.shopping,
+        "transport": data.transport,
+        "bills": data.bills,
+        "health": data.health,
+        "entertainment": data.entertainment
+    }
+
+    total_spend = sum(spend_dict.values())
+    remaining = data.salary - total_spend
+
+    # -------------------------------
+    # ML Pipeline
+    # -------------------------------
+    new_user_df = build_features(data.salary, spend_dict)
+    X_new = prepare_for_clustering(new_user_df)
+    X_scaled = scaler.transform(X_new)
+    cluster = int(kmeans.predict(X_scaled)[0])
+
+    new_user_df['cluster'] = cluster
+
+    # -------------------------------
+    # ✅ Cluster Label (NEW)
+    # -------------------------------
+    cluster_labels = {
+        0: "Saver",
+        1: "Overspender"
+    }
+
+    cluster_name = cluster_labels.get(cluster, f"Cluster {cluster}")
+
+    # -------------------------------
+    # Recommendation
+    # -------------------------------
+    recommendation = generate_final_recommendation(
+        new_user_df.iloc[0],
+        cluster_baseline
+    )
+
+    # -------------------------------
+    # Response
+    # -------------------------------
+    return {
+        "total_spend": total_spend,
+        "remaining": remaining,
+        "cluster": cluster,
+        "cluster_label": cluster_name,
+        "recommendation": recommendation
+    }
